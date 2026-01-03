@@ -110,7 +110,8 @@ final class SyncGCalToNotionCommand extends Command
         $timeMax = $this->isoNowUtc();
 
         $peopleResolver->warmCache();
-        $timeSync->primeExistingByRange($timeMin, $timeMax);
+        $dealResolver->warmCache();
+        $timeSync->primeExistingAll();
 
         $output->writeln("Sync window: {$timeMin} .. {$timeMax}");
         $output->writeln('Calendars: ' . implode(', ', array_map(

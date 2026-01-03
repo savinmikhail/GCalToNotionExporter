@@ -62,6 +62,41 @@ final class TimeEntriesSync
         } while ($hasMore);
     }
 
+    public function primeExistingAll(): void
+    {
+        $this->existingByEventKey = [];
+        $this->prefetched = true;
+
+        $cursor = null;
+        do {
+            $payload = [
+                'page_size' => 100,
+                'filter' => [
+                    'property' => $this->prop('eventKey'),
+                    'rich_text' => ['is_not_empty' => true],
+                ],
+            ];
+            if ($cursor) {
+                $payload['start_cursor'] = $cursor;
+            }
+
+            $resp = $this->notion->queryDatabase($this->timeDbId, $payload);
+            foreach ($resp['results'] ?? [] as $page) {
+                $eventKey = $this->extractRichText($page, $this->prop('eventKey'));
+                if ($eventKey === null || $eventKey === '') {
+                    continue;
+                }
+                $snapshot = $this->snapshotFromPage($page);
+                if (!empty($snapshot['id'])) {
+                    $this->existingByEventKey[$eventKey] = $snapshot;
+                }
+            }
+
+            $cursor = $resp['next_cursor'] ?? null;
+            $hasMore = (bool)($resp['has_more'] ?? false);
+        } while ($hasMore);
+    }
+
     public function upsert(array $data): void
     {
         $existing = $this->findByEventKey($data['eventKey']);
@@ -119,15 +154,11 @@ final class TimeEntriesSync
 
     private function findByEventKey(string $eventKey): ?array
     {
-        if ($this->prefetched && array_key_exists($eventKey, $this->existingByEventKey)) {
-            return $this->existingByEventKey[$eventKey];
+        if ($this->prefetched) {
+            return $this->existingByEventKey[$eventKey] ?? null;
         }
 
-        $snapshot = $this->fetchByEventKey($eventKey);
-        if ($this->prefetched) {
-            $this->existingByEventKey[$eventKey] = $snapshot;
-        }
-        return $snapshot;
+        return $this->fetchByEventKey($eventKey);
     }
 
     private function fetchByEventKey(string $eventKey): ?array

@@ -5,9 +5,9 @@ declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
 
+use App\Command\Calendar\SyncGCalToNotionCommand;
 use App\Command\GetRefreshTokenCommand;
 use App\Command\RenumberQuestionsCommand;
-use App\Command\SyncGCalToNotionCommand;
 use Dotenv\Dotenv;
 use Symfony\Component\Console\Application;
 

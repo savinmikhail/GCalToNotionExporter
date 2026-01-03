@@ -31,7 +31,6 @@ final class SyncGCalToNotionCommand extends Command
     private const PEOPLE_PROP_TG = 'tg';
 
     private const DEALS_PROP_PERSON_REL = 'Person';
-    private const DEALS_PROP_STAGE = 'Sales stage';
     private const DEALS_PROP_START_DATE = 'Start date';
 
     private const TIME_PROP_NAME = 'Name';
@@ -83,7 +82,6 @@ final class SyncGCalToNotionCommand extends Command
             $notion,
             $notionDealsDbId,
             self::DEALS_PROP_PERSON_REL,
-            self::DEALS_PROP_STAGE,
             self::DEALS_PROP_START_DATE
         );
         $timeSync = new TimeEntriesSync(

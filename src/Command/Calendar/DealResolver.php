@@ -12,7 +12,6 @@ final class DealResolver
         private readonly NotionClient $notion,
         private readonly string $dealsDbId,
         private readonly string $personRelationProperty,
-        private readonly string $stageProperty,
         private readonly string $startDateProperty
     ) {}
 
@@ -34,12 +33,6 @@ final class DealResolver
                     [
                         'property' => $this->personRelationProperty,
                         'relation' => ['contains' => $personPageId],
-                    ],
-                    [
-                        'or' => [
-                            ['property' => $this->stageProperty, 'select' => ['equals' => 'Started']],
-                            ['property' => $this->stageProperty, 'select' => ['equals' => 'Active']],
-                        ],
                     ],
                 ],
             ],

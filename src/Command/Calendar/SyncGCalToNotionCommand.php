@@ -39,7 +39,7 @@ final class SyncGCalToNotionCommand extends Command
     private const TIME_PROP_DURATION_MIN = 'Duration (min)';
     private const TIME_PROP_TYPE = 'Type';
     private const TIME_PROP_PERSON_REL = 'Person';
-    private const TIME_PROP_DEAL_REL = 'Deal';
+    private const TIME_PROP_DEAL_REL = 'Deals';
     private const TIME_PROP_SOURCE = 'Source';
     private const TIME_PROP_GCAL_EVENTKEY = 'GCal Event Key';
     private const TIME_PROP_CALENDAR = 'Calendar';
@@ -123,6 +123,10 @@ final class SyncGCalToNotionCommand extends Command
             $output->writeln('');
             $output->writeln("--- Calendar: {$calendarLabel} ({$calendarId}) ---");
 
+            $currentDay = null;
+            $currentDayStart = null;
+            $currentDayEvents = 0;
+
             $pageToken = null;
             $seen = 0;
 
@@ -156,6 +160,24 @@ final class SyncGCalToNotionCommand extends Command
                     if (!$startIso || !$endIso) {
                         continue;
                     }
+
+                    $eventDay = $this->eventDay($startIso);
+                    if ($eventDay !== $currentDay) {
+                        if ($currentDay !== null && $currentDayStart !== null) {
+                            $elapsed = microtime(true) - $currentDayStart;
+                            $output->writeln(sprintf(
+                                'Day done: %s in %.2fs (events: %d)',
+                                $currentDay,
+                                $elapsed,
+                                $currentDayEvents
+                            ));
+                        }
+                        $currentDay = $eventDay;
+                        $currentDayStart = microtime(true);
+                        $currentDayEvents = 0;
+                        $output->writeln("Processing day: {$currentDay}");
+                    }
+                    $currentDayEvents++;
 
                     $tg = $this->extractFirstTg($summary, $description);
                     $billable = $this->hasBillableFlag($description);
@@ -205,6 +227,16 @@ final class SyncGCalToNotionCommand extends Command
                 }
             } while ($pageToken);
 
+            if ($currentDay !== null && $currentDayStart !== null) {
+                $elapsed = microtime(true) - $currentDayStart;
+                $output->writeln(sprintf(
+                    'Day done: %s in %.2fs (events: %d)',
+                    $currentDay,
+                    $elapsed,
+                    $currentDayEvents
+                ));
+            }
+
             $output->writeln("Fetched events (raw): {$seen}");
         }
 
@@ -231,6 +263,13 @@ final class SyncGCalToNotionCommand extends Command
         $tg = trim($tg);
         $tg = ltrim($tg, '@') ?? $tg;
         return strtolower($tg);
+    }
+
+    private function eventDay(string $startIso): string
+    {
+        return (new DateTimeImmutable($startIso))
+            ->setTimezone(new DateTimeZone(self::TZ))
+            ->format('Y-m-d');
     }
 
     private function extractFirstTg(string $summary, string $description): ?string

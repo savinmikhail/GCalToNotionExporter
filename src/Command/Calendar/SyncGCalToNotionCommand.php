@@ -297,14 +297,13 @@ final class SyncGCalToNotionCommand extends Command
         }
         $s = strtolower($summary . ' ' . $description);
         $map = [
-            'review' => ['review', 'ревью', 'code review', 'pr'],
-            'session' => ['session', 'сессия', 'занятие', 'менторинг'],
-            'mock' => ['mock', 'мок', 'interview', 'интервью', 'собес'],
-            'call' => ['call', 'созвон', 'sync', 'синк'],
-            'group' => ['group', 'групп', 'группа'],
-            'admin' => ['admin', 'организац', 'орг', 'invoice', 'счет', 'договор'],
-            'prep' => ['prep', 'подготов', 'plan', 'план'],
-            'chat' => ['chat', 'чат', 'перепис'],
+            'review' => ['review', 'ревью', 'code review', 'pr', 'тестовое', 'тз'],
+            'mock' => ['mock', 'мок'],
+            'admin' => ['велком', 'welcome', 'орг'],
+            'тех' => ['тех', 'собес'],
+            'задачи' => ['задачи', 'задачки', 'задача'],
+            'hr' => ['резюме', 'легенда'],
+            'group' => ['кросс']
         ];
         foreach ($map as $type => $needles) {
             foreach ($needles as $needle) {

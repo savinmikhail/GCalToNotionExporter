@@ -43,6 +43,7 @@ final class SyncGCalToNotionCommand extends Command
     private const TIME_PROP_GCAL_EVENTKEY = 'GCal Event Key';
     private const TIME_PROP_CALENDAR = 'Calendar';
     private const TIME_PROP_LINK = 'Link';
+    private const TIME_PROP_GROUP = 'Group';
 
     protected function configure(): void
     {
@@ -98,6 +99,7 @@ final class SyncGCalToNotionCommand extends Command
                 'eventKey' => self::TIME_PROP_GCAL_EVENTKEY,
                 'calendar' => self::TIME_PROP_CALENDAR,
                 'link' => self::TIME_PROP_LINK,
+                'group' => self::TIME_PROP_GROUP,
             ],
             $output
         );
@@ -177,27 +179,24 @@ final class SyncGCalToNotionCommand extends Command
                     }
                     $currentDayEvents++;
 
-                    $tg = $this->extractFirstTg($summary, $description);
+                    $tgs = $this->extractTgs($summary, $description);
+                    $tgCount = count($tgs);
+                    $hasTg = $tgCount > 0;
                     $billable = $this->hasBillableFlag($description);
                     $slot = $this->isSlot($summary, $description);
 
-                    if (self::SKIP_SLOTS_BY_DEFAULT && $slot && !$billable && !$tg) {
+                    if (self::SKIP_SLOTS_BY_DEFAULT && $slot && !$billable && !$hasTg) {
                         continue;
                     }
-                    if (self::REQUIRE_TG_OR_BILLABLE && !$tg && !$billable) {
+                    if (self::REQUIRE_TG_OR_BILLABLE && !$hasTg && !$billable) {
                         continue;
                     }
-                    if (!$tg) {
-                        continue;
-                    }
-
-                    $personId = $peopleResolver->resolvePersonIdByTg($tg);
-                    if (!$personId) {
-                        $output->writeln("SKIP (unknown tg=@{$tg}) eventId={$event->getId()} summary=\"{$summary}\"");
+                    if (!$hasTg) {
                         continue;
                     }
 
                     $type = $this->detectType($summary, $description);
+                    $group = $this->isGroupCall($summary, $description, $tgCount);
 
                     $startTs = (new DateTimeImmutable($startIso))->getTimestamp();
                     $endTs = (new DateTimeImmutable($endIso))->getTimestamp();
@@ -207,21 +206,36 @@ final class SyncGCalToNotionCommand extends Command
                         continue;
                     }
 
-                    $eventKey = $calendarId . ':' . (string)$event->getId();
-                    $dealId = $dealResolver->resolveActiveDealIdForPerson($personId);
+                    $eventKeyBase = $calendarId . ':' . (string)$event->getId();
 
-                    $timeSync->upsert([
-                        'eventKey' => $eventKey,
-                        'title' => '@' . $tg . ' — ' . $type,
-                        'startIso' => $startIso,
-                        'durationMin' => $durationMin,
-                        'type' => $type,
-                        'personId' => $personId,
-                        'dealId' => $dealId,
-                        'calendarLabel' => $calendarLabel,
-                        'link' => (string)$event->getHtmlLink(),
-                        'cancelled' => $cancelled,
-                    ]);
+                    foreach ($tgs as $tg) {
+                        $personId = $peopleResolver->resolvePersonIdByTg($tg);
+                        if (!$personId) {
+                            $output->writeln("SKIP (unknown tg=@{$tg}) eventId={$event->getId()} summary=\"{$summary}\"");
+                            continue;
+                        }
+
+                        $eventKey = $eventKeyBase;
+                        if ($tgCount > 1) {
+                            $eventKey .= ':' . $tg;
+                        }
+
+                        $dealId = $dealResolver->resolveActiveDealIdForPerson($personId);
+
+                        $timeSync->upsert([
+                            'eventKey' => $eventKey,
+                            'title' => '@' . $tg . ' — ' . $type,
+                            'startIso' => $startIso,
+                            'durationMin' => $durationMin,
+                            'type' => $type,
+                            'group' => $group,
+                            'personId' => $personId,
+                            'dealId' => $dealId,
+                            'calendarLabel' => $calendarLabel,
+                            'link' => (string)$event->getHtmlLink(),
+                            'cancelled' => $cancelled,
+                        ]);
+                    }
                 }
             } while ($pageToken);
 
@@ -270,13 +284,15 @@ final class SyncGCalToNotionCommand extends Command
             ->format('Y-m-d');
     }
 
-    private function extractFirstTg(string $summary, string $description): ?string
+    private function extractTgs(string $summary, string $description): array
     {
         $text = $summary . "\n" . $description;
-        if (preg_match('/@([a-zA-Z0-9_]{3,})/', $text, $m)) {
-            return $this->normalizeTg($m[1]);
+        if (preg_match_all('/@([a-zA-Z0-9_]{3,})/', $text, $m)) {
+            $tgs = array_map([$this, 'normalizeTg'], $m[1]);
+            $tgs = array_values(array_filter($tgs, static fn($tg) => $tg !== ''));
+            return array_values(array_unique($tgs));
         }
-        return null;
+        return [];
     }
 
     private function hasBillableFlag(string $description): bool
@@ -288,6 +304,15 @@ final class SyncGCalToNotionCommand extends Command
     {
         return (bool)preg_match('/\bslot\s*=\s*1\b/i', $description)
             || (bool)preg_match('/\bslot\b/i', $summary);
+    }
+
+    private function isGroupCall(string $summary, string $description, int $tgCount): bool
+    {
+        if ($tgCount > 1) {
+            return true;
+        }
+        $text = $summary . ' ' . $description;
+        return (bool)preg_match('/\b(кросс|cross|group|групп)\b/iu', $text);
     }
 
     private function detectType(string $summary, string $description): string
@@ -302,8 +327,7 @@ final class SyncGCalToNotionCommand extends Command
             'admin' => ['велком', 'welcome', 'орг'],
             'тех' => ['тех', 'собес'],
             'задачи' => ['задачи', 'задачки', 'задача'],
-            'hr' => ['резюме', 'легенда'],
-            'group' => ['кросс']
+            'hr' => ['резюме', 'легенда']
         ];
         foreach ($map as $type => $needles) {
             foreach ($needles as $needle) {

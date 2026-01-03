@@ -87,6 +87,7 @@ final class TimeEntriesSync
             $this->prop('eventKey') => self::notionRichText($data['eventKey']),
             $this->prop('calendar') => self::notionSelect($data['calendarLabel']),
             $this->prop('link') => self::notionUrl($data['link']),
+            $this->prop('group') => self::notionCheckbox((bool)$data['group']),
         ];
 
         if (!empty($data['dealId'])) {
@@ -160,6 +161,9 @@ final class TimeEntriesSync
         if (($existing['source'] ?? null) !== 'gcal') {
             return false;
         }
+        if ((bool)($existing['group'] ?? false) !== (bool)$data['group']) {
+            return false;
+        }
         if (($existing['calendar'] ?? null) !== $data['calendarLabel']) {
             return false;
         }
@@ -212,6 +216,11 @@ final class TimeEntriesSync
         return ['url' => $url];
     }
 
+    private static function notionCheckbox(bool $checked): array
+    {
+        return ['checkbox' => $checked];
+    }
+
     private static function notionRelation(array $pageIds): array
     {
         return ['relation' => array_map(static fn($id) => ['id' => $id], $pageIds)];
@@ -229,6 +238,7 @@ final class TimeEntriesSync
             'personIds' => $this->extractRelationIds($page, $this->prop('personRel')),
             'dealIds' => $this->extractRelationIds($page, $this->prop('dealRel')),
             'source' => $this->extractSelectName($page, $this->prop('source')),
+            'group' => $this->extractCheckbox($page, $this->prop('group')),
             'calendar' => $this->extractSelectName($page, $this->prop('calendar')),
             'link' => $this->extractUrl($page, $this->prop('link')),
         ];
@@ -280,6 +290,11 @@ final class TimeEntriesSync
     private function extractSelectName(array $page, string $prop): ?string
     {
         return $page['properties'][$prop]['select']['name'] ?? null;
+    }
+
+    private function extractCheckbox(array $page, string $prop): bool
+    {
+        return (bool)($page['properties'][$prop]['checkbox'] ?? false);
     }
 
     private function extractRelationIds(array $page, string $prop): array
